@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Object Recognition</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ml5/0.12.2/ml5.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Live Object Recognition</h1>
+  <p id="status">Loading model...</p>
+
+  <script>
+    let video;
+    let detector;
+    let detections = [];
+
+    function setup() {
+      // Create a canvas that fits the phone's width
+      const canvasWidth = windowWidth < 640 ? windowWidth : 640;
+      const canvasHeight = canvasWidth * 0.75; // Maintain a 4:3 aspect ratio
+      createCanvas(canvasWidth, canvasHeight);
+
+      // Start video capture (access the phone's camera)
+      video = createCapture(VIDEO);
+      video.size(canvasWidth, canvasHeight);
+      video.hide();
+
+      // Load the COCO-SSD model
+      detector = ml5.objectDetector('cocossd', modelLoaded);
+    }
+
+    function modelLoaded() {
+      select('#status').html('Model loaded! Detecting objects...');
+      detectObjects();
+    }
+
+    function detectObjects() {
+      detector.detect(video, (err, results) => {
+        if (err) {
+          console.error(err);
+          return;
+        }
+        detections = results;
+        detectObjects(); // Recursively call to enable live detection
+      });
+    }
+
+    function draw() {
+      image(video, 0, 0, width, height);
+
+      // Draw detected objects
+      for (let i = 0; i < detections.length; i++) {
+        let object = detections[i];
+        noFill();
+        stroke(0, 255, 0);
+        strokeWeight(2);
+        rect(object.x, object.y, object.width, object.height);
+        noStroke();
+        fill(255);
+        textSize(16);
+        text(
+          `${object.label} (${nf(object.confidence * 100, 0, 2)}%)`,
+          object.x + 5,
+          object.y + 15
+        );
+      }
+    }
+  </script>
+</body>
+</html>
