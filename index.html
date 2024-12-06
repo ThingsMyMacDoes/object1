@@ -3,87 +3,97 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Object Recognition</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ml5/0.12.2/ml5.min.js"></script>
+  <title>Tiny YOLO Object Detection</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.9.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <style>
     body {
       margin: 0;
-      padding: 0;
-      text-align: center;
       font-family: Arial, sans-serif;
+      text-align: center;
     }
     canvas {
       display: block;
-      margin: 0 auto;
-      max-width: 100%;
+      margin: 20px auto;
     }
     #status {
-      margin-top: 10px;
+      margin: 10px;
       font-size: 18px;
     }
   </style>
 </head>
 <body>
-  <h1>Live Object Recognition</h1>
+  <h1>Tiny YOLO Object Detection</h1>
   <p id="status">Loading model...</p>
-
   <script>
     let video;
-    let detector;
+    let model;
     let detections = [];
 
-    function setup() {
-      // Create a canvas that fits the phone's width
-      const canvasWidth = windowWidth < 640 ? windowWidth : 640;
-      const canvasHeight = canvasWidth * 0.75; // Maintain a 4:3 aspect ratio
-      createCanvas(canvasWidth, canvasHeight);
+    async function setupCamera() {
+      video = document.createElement('video');
+      video.width = 640;
+      video.height = 480;
+      video.autoplay = true;
+      video.playsInline = true;
 
-      // Start video capture (access the phone's camera)
-      video = createCapture(VIDEO);
-      video.size(canvasWidth, canvasHeight);
-      video.hide();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      video.srcObject = stream;
 
-      // Load the COCO-SSD model
-      detector = ml5.objectDetector('cocossd', modelLoaded);
-    }
-
-    function modelLoaded() {
-      select('#status').html('Model loaded! Detecting objects...');
-      detectObjects();
-    }
-
-    function detectObjects() {
-      detector.detect(video, (err, results) => {
-        if (err) {
-          console.error(err);
-          return;
-        }
-        detections = results;
-        detectObjects(); // Recursively call to enable live detection
+      return new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          resolve(video);
+        };
       });
     }
 
-    function draw() {
-      image(video, 0, 0, width, height);
+    async function loadModel() {
+      // Load the pre-trained COCO-SSD model (lightweight alternative to YOLO)
+      model = await cocoSsd.load();
+      document.getElementById('status').textContent = 'Model loaded!';
+      detectObjects();
+    }
+
+    async function detectObjects() {
+      const predictions = await model.detect(video);
+      detections = predictions;
+
+      drawCanvas();
+      requestAnimationFrame(detectObjects);
+    }
+
+    function drawCanvas() {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+
+      // Draw video feed
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       // Draw detected objects
-      for (let i = 0; i < detections.length; i++) {
-        let object = detections[i];
-        noFill();
-        stroke(0, 255, 0);
-        strokeWeight(2);
-        rect(object.x, object.y, object.width, object.height);
-        noStroke();
-        fill(255);
-        textSize(16);
-        text(
-          `${object.label} (${nf(object.confidence * 100, 0, 2)}%)`,
-          object.x + 5,
-          object.y + 15
-        );
-      }
+      detections.forEach((item) => {
+        const { bbox, class: label, score } = item;
+
+        ctx.strokeStyle = 'lime';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bbox[0], bbox[1], bbox[2], bbox[3]);
+
+        ctx.font = '18px Arial';
+        ctx.fillStyle = 'lime';
+        ctx.fillText(`${label} (${(score * 100).toFixed(1)}%)`, bbox[0], bbox[1] - 5);
+      });
+
+      document.body.appendChild(canvas);
     }
+
+    (async () => {
+      await setupCamera();
+      document.body.appendChild(video);
+      await loadModel();
+    })();
   </script>
 </body>
 </html>
